@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/perbu/go-api-with-sshd/api"
+	"github.com/perbu/go-api-with-sshd/backdoor"
 	"log"
 	"os"
 	"os/signal"
@@ -24,6 +25,16 @@ func realMain() error {
 		err := a.Run(ctx, ":8080")
 		if err != nil {
 			log.Println(err)
+			cancel()
+		}
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err := backdoor.Run(ctx, ":2222", a)
+		if err != nil {
+			log.Println(err)
+			cancel()
 		}
 	}()
 	wg.Wait()

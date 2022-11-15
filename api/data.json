@@ -8,15 +8,24 @@
     "name": "Bob",
     "age": 40,
     "pets": [
-      "fido"
+      {
+        "name": "Rex",
+        "type": "dog"
+      }
     ]
   },
   {
     "name": "Alice",
     "age": 50,
     "pets": [
-      "fido",
-      "rex"
+      {
+        "name": "Snoopy",
+        "type": "dog"
+      },
+      {
+        "name": "Kitty",
+        "type": "cat"
+      }
     ]
   }
 ]
