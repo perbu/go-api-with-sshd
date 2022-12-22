@@ -31,7 +31,7 @@ func realMain() error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		err := backdoor.Run(ctx, ":2222", a)
+		err := backdoor.Run(ctx, ":2222", a) // notice how we pass the api to the backdoor
 		if err != nil {
 			log.Println(err)
 			cancel()

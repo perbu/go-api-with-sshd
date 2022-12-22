@@ -1,24 +1,24 @@
 package api
 
-func (c *counters) IncErrors() {
+func (c *Counters) IncErrors() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.errors++
 }
 
-func (c *counters) IncRequests() {
+func (c *Counters) IncRequests() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.requests++
 }
 
-func (c *counters) GetErrors() int {
+func (c *Counters) GetErrors() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.errors
 }
 
-func (c *counters) GetRequests() int {
+func (c *Counters) GetRequests() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.requests

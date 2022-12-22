@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"github.com/gliderlabs/ssh"
 	"github.com/perbu/go-api-with-sshd/api"
-	"golang.org/x/crypto/ssh/terminal"
+	terminal "golang.org/x/term"
 	"io"
 	"log"
 	"strings"
@@ -77,12 +77,12 @@ func (a sshApp) sshHandler(s ssh.Session) {
 		output, err := a.handleTerminalInput(line)
 		if err != nil {
 			log.Printf("Error handling terminal input: %s", err)
-			return
+			_, _ = io.WriteString(s, "error: "+err.Error())
 		}
 		_, err = io.WriteString(s, output)
 		if err != nil {
 			log.Printf("Error writing to session: %s", err)
-			return
+			return // will end the session.
 		}
 	}
 }
@@ -90,6 +90,9 @@ func (a sshApp) sshHandler(s ssh.Session) {
 func (a sshApp) handleTerminalInput(line string) (string, error) {
 	ss := strings.SplitN(line, " ", 2)
 	switch ss[0] {
+	case "help":
+		// note that quit is handled in the main loop, doesn't reach this point
+		return "Available commands: ls, logs <username>, echo <input>, quit\n", nil
 	case "ls":
 		return a.handleLs()
 	case "logs":
@@ -100,7 +103,7 @@ func (a sshApp) handleTerminalInput(line string) (string, error) {
 	case "echo":
 		return fmt.Sprintf("echo: %s\n", line), nil
 	default:
-		return fmt.Sprintf("command not recognized\n"), nil
+		return "command not recognized\n", nil
 	}
 }
 
@@ -129,7 +132,7 @@ func (a sshApp) handleLogs(userName string) (string, error) {
 	return output, nil
 }
 
-func (a sshApp) myPubKeyHandler(ctx ssh.Context, key ssh.PublicKey) bool {
+func (a sshApp) myPubKeyHandler(_ ssh.Context, key ssh.PublicKey) bool {
 	if ssh.KeysEqual(key, a.pubKey) {
 		return true
 	} else {
