@@ -18,17 +18,48 @@ import (
 var embeddedAuthorizedKeys []byte
 
 type sshApp struct {
-	server *ssh.Server
-	pubKey ssh.PublicKey
-	api    *api.API
+	server         *ssh.Server     // the gliderlabs ssh server
+	authorizedKeys []ssh.PublicKey // the public keys that are allowed to connect
+	api            *api.API        // the API reference.
 }
 
-func getAuthorizedKeys() ssh.PublicKey {
-	pubKey, _, _, _, err := ssh.ParseAuthorizedKey(embeddedAuthorizedKeys)
+func Run(ctx context.Context, addr string, api *api.API) error {
+	pks, err := getAuthorizedKeys()
 	if err != nil {
-		log.Fatalf("Couldn't make sense of authorized key: %s", err)
+		return err
 	}
-	return pubKey
+	a := sshApp{
+		authorizedKeys: pks,
+		api:            api,
+	}
+	a.server = &ssh.Server{
+		Addr:             addr,
+		Handler:          a.sshHandler,
+		PublicKeyHandler: a.myPubKeyHandler,
+	}
+
+	go func() {
+		<-ctx.Done()
+		_ = a.server.Shutdown(context.TODO())
+	}()
+	log.Println("Starting ssh server on", addr)
+	return a.server.ListenAndServe() // blocks
+}
+
+func getAuthorizedKeys() ([]ssh.PublicKey, error) {
+	// parse the embedded authorized_keys file
+	keys := make([]ssh.PublicKey, 0)
+	for {
+		pubKey, _, _, rest, err := ssh.ParseAuthorizedKey(embeddedAuthorizedKeys)
+		if err != nil {
+			return nil, fmt.Errorf("parsing authorized keys: %w", err)
+		}
+		keys = append(keys, pubKey)
+		if len(rest) == 0 {
+			break
+		}
+	}
+	return keys, nil
 }
 
 func (a sshApp) sshHandler(s ssh.Session) {
@@ -41,7 +72,7 @@ func (a sshApp) sshHandler(s ssh.Session) {
 	pty, winCh, isPty := s.Pty()
 	if isPty {
 		fmt.Println("PTY term", pty.Term)
-		go func() {
+		go func() { // Handles window resize
 			for chInfo := range winCh {
 				err := term.SetSize(chInfo.Width, chInfo.Height)
 				if err != nil {
@@ -133,27 +164,12 @@ func (a sshApp) handleLogs(userName string) (string, error) {
 }
 
 func (a sshApp) myPubKeyHandler(_ ssh.Context, key ssh.PublicKey) bool {
-	if ssh.KeysEqual(key, a.pubKey) {
-		return true
-	} else {
-		return false
+	for _, pk := range a.authorizedKeys {
+		if ssh.KeysEqual(key, pk) {
+			log.Printf("Public key accepted: %s", key.Type())
+			return true
+		}
 	}
-}
-
-func Run(ctx context.Context, addr string, api *api.API) error {
-	a := sshApp{
-		pubKey: getAuthorizedKeys(),
-		api:    api,
-	}
-	a.server = &ssh.Server{
-		Addr:             addr,
-		Handler:          a.sshHandler,
-		PublicKeyHandler: a.myPubKeyHandler,
-	}
-	go func() {
-		<-ctx.Done()
-		_ = a.server.Shutdown(context.TODO())
-	}()
-	log.Println("Starting ssh server on", addr)
-	return a.server.ListenAndServe()
+	log.Printf("Public key rejected: %s", key.Type())
+	return false
 }
