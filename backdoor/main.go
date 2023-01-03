@@ -18,7 +18,7 @@ import (
 var embeddedAuthorizedKeys []byte
 
 type sshApp struct {
-	server         *ssh.Server     // the gliderlabs ssh server
+	server         *ssh.Server     // the Gliderlabs ssh server
 	authorizedKeys []ssh.PublicKey // the public keys that are allowed to connect
 	api            *api.API        // the API reference.
 }
@@ -46,6 +46,8 @@ func Run(ctx context.Context, addr string, api *api.API) error {
 	return a.server.ListenAndServe() // blocks
 }
 
+// getAuthorizedKeys returns the public keys that are allowed to connect to the
+// server. It gets these keys from the embedded authorized_keys file.
 func getAuthorizedKeys() ([]ssh.PublicKey, error) {
 	// parse the embedded authorized_keys file
 	keys := make([]ssh.PublicKey, 0)
@@ -62,12 +64,16 @@ func getAuthorizedKeys() ([]ssh.PublicKey, error) {
 	return keys, nil
 }
 
+// sshHandler gets invoked by the gliderlabs ssh server when a new connection
+// is established.
 func (a sshApp) sshHandler(s ssh.Session) {
 	defer s.Close()
+	// reject raw commands. We only want to handle interactive sessions.
 	if s.RawCommand() != "" {
 		_, _ = io.WriteString(s, "raw commands are not supported")
 		return
 	}
+	// set up terminal, winch, pty etc.
 	term := terminal.NewTerminal(s, fmt.Sprintf("%s> ", s.User()))
 	pty, winCh, isPty := s.Pty()
 	if isPty {
@@ -81,41 +87,49 @@ func (a sshApp) sshHandler(s ssh.Session) {
 			}
 		}()
 	}
+	// greet.
 	_, err := io.WriteString(s, fmt.Sprintf("Welcome, %s\n", s.User()))
 	if err != nil {
 		log.Println(err)
 		return
 	}
-
+	// main loop:
 	for {
+		// read one line of input. blocks.
 		line, err := term.ReadLine()
+		// if user has disconnected:
 		if err == io.EOF {
 			// Ignore errors here:
 			_, _ = io.WriteString(s, "EOF.\n")
 			break
 		}
+		// if there was an error reading the line:
 		if err != nil {
 			// Ignore errors here:
 			_, _ = io.WriteString(s, "Error while reading: "+err.Error())
 			break
 		}
+		// if the user wants to quit:
 		if line == "quit" {
 			break
 		}
+		// ignore empty lines:
 		if line == "" {
 			continue
 		}
+		// handle the command given by the user, collect feedback in the output variable.
 		output, err := a.handleTerminalInput(line)
 		if err != nil {
 			log.Printf("Error handling terminal input: %s", err)
 			_, _ = io.WriteString(s, "error: "+err.Error())
 		}
+		// write the output to the terminal.
 		_, err = io.WriteString(s, output)
 		if err != nil {
 			log.Printf("Error writing to session: %s", err)
 			return // will end the session.
 		}
-	}
+	} // end main loop
 }
 
 func (a sshApp) handleTerminalInput(line string) (string, error) {
