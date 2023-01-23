@@ -77,7 +77,7 @@ func (a sshApp) sshHandler(s ssh.Session) {
 	term := terminal.NewTerminal(s, fmt.Sprintf("%s> ", s.User()))
 	pty, winCh, isPty := s.Pty()
 	if isPty {
-		fmt.Println("PTY term", pty.Term)
+		fmt.Println("User connected, got PTY term:", pty.Term)
 		go func() { // Handles window resize
 			for chInfo := range winCh {
 				err := term.SetSize(chInfo.Width, chInfo.Height)
@@ -97,24 +97,29 @@ func (a sshApp) sshHandler(s ssh.Session) {
 	for {
 		// read one line of input. blocks.
 		line, err := term.ReadLine()
+		log.Println("User input:", line)
 		// if user has disconnected:
 		if err == io.EOF {
 			// Ignore errors here:
 			_, _ = io.WriteString(s, "EOF.\n")
+			log.Println("User disconnected (EOF)")
 			break
 		}
 		// if there was an error reading the line:
 		if err != nil {
 			// Ignore errors here:
 			_, _ = io.WriteString(s, "Error while reading: "+err.Error())
+			log.Println("Error while reading:", err)
 			break
 		}
 		// if the user wants to quit:
 		if line == "quit" {
+			log.Println("User disconnected (quit command)")
 			break
 		}
 		// ignore empty lines:
 		if line == "" {
+			log.Println("User input: empty line (ignored)")
 			continue
 		}
 		// handle the command given by the user, collect feedback in the output variable.
@@ -123,6 +128,7 @@ func (a sshApp) sshHandler(s ssh.Session) {
 			log.Printf("Error handling terminal input: %s", err)
 			_, _ = io.WriteString(s, "error: "+err.Error())
 		}
+		log.Println("User output:", output)
 		// write the output to the terminal.
 		_, err = io.WriteString(s, output)
 		if err != nil {
@@ -130,6 +136,7 @@ func (a sshApp) sshHandler(s ssh.Session) {
 			return // will end the session.
 		}
 	} // end main loop
+	log.Println("Session ended")
 }
 
 func (a sshApp) handleTerminalInput(line string) (string, error) {
