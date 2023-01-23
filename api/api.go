@@ -43,7 +43,7 @@ func (a *API) GetCounters() *Counters {
 func (c *Counters) String() string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return fmt.Sprintf("Requests: %d, Errors: %d", c.requests, c.errors)
+	return fmt.Sprintf("Requests: %d, Errors: %d\n", c.requests, c.errors)
 }
 
 func New() (*API, error) {
